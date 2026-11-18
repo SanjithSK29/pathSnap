@@ -16,6 +16,7 @@ import joblib
 import numpy as np
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from pathsnap.hmm import HMMDecoder
@@ -119,3 +120,9 @@ def predict(req: PredictRequest):
 def _reference_arcs(trip):
     from pathsnap.labeling import label_trip
     return label_trip(trip)
+
+
+# serve the evaluator UI (mounted LAST so /trips, /health, /predict take precedence)
+UI_DIR = os.path.join(ROOT, "ui")
+if os.path.isdir(UI_DIR):
+    app.mount("/", StaticFiles(directory=UI_DIR, html=True), name="ui")
