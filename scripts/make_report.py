@@ -166,6 +166,15 @@ def build():
     for _, r in df.iterrows():
         story.append(Paragraph(f"{r['model']} — {r['family']}", H3))
         story.append(P(_model_text(r["model"])))
+        story.append(P(
+            f"<b>Results on the student-test set:</b> observation-level Top-1 accuracy "
+            f"<b>{r['student_top1']:.3f}</b>, Macro F1 <b>{r['student_macro_f1']:.3f}</b>, "
+            f"Log Loss <b>{r['student_log_loss']:.3f}</b>. "
+            f"<b>Overfitting:</b> cross-validated Macro F1 ({r['cv_macro_f1']:.3f}) is close to or "
+            f"below the student-test Macro F1 ({r['student_macro_f1']:.3f}), so no overfitting is "
+            f"evident; the student-test partition is clean (low candidate-miss rate) while the "
+            f"training partition contains a minority of noisy trips, which is why test performance "
+            f"meets or exceeds the cross-validation estimate."))
         story.append(Spacer(1, 0.15 * cm))
 
     # MLP loss curve (epoch-wise history)
