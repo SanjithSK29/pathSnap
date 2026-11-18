@@ -1,0 +1,15 @@
+{
+  "best": {
+    "learning_rate": 0.020791301844397533,
+    "num_leaves": 39,
+    "min_child_samples": 39,
+    "subsample": 0.5017405634939839,
+    "colsample_bytree": 0.5320189358792083,
+    "reg_lambda": 0.06776198081048933,
+    "reg_alpha": 2.643332661198342,
+    "n_estimators": 192
+  },
+  "best_value": 0.7763448849036606,
+  "objective": "top1",
+  "trials": 20
+}

@@ -1,0 +1,20 @@
+# provided raw dataset (input; not part of the submission)
+/train/
+/student_test/
+
+# regenerable caches (rebuilt by scripts/build_data.py)
+experiments/*.npz
+experiments/student_test/
+experiments/logs/*.log
+
+# large regenerable model artifacts (rebuilt by scripts/train_models.py)
+artifacts/models/Random_Forest.joblib
+artifacts/models/HistGradientBoosting.joblib
+artifacts/models/XGBoost.joblib
+artifacts/models/MLP.joblib
+artifacts/models/LightGBM_tuned.joblib
+
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.optuna/

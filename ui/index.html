@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PathSnap — Evaluator UI</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    :root { --bg:#0f1420; --panel:#1a2130; --accent:#4c8dff; --ok:#34d399; --txt:#e6ebf5; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: system-ui, -apple-system, Segoe UI, sans-serif;
+           background:var(--bg); color:var(--txt); }
+    header { padding:18px 26px; background:var(--panel); border-bottom:1px solid #232c3f;
+             display:flex; align-items:center; gap:14px; }
+    header h1 { font-size:20px; margin:0; }
+    header .sub { color:#8a94a8; font-size:13px; }
+    main { display:flex; height:calc(100vh - 68px); }
+    .sidebar { width:340px; padding:20px; background:var(--panel); border-right:1px solid #232c3f;
+               overflow-y:auto; }
+    .sidebar label { display:block; font-size:13px; margin:12px 0 6px; color:#aab4c8; }
+    select, button { width:100%; padding:10px 12px; border-radius:8px; border:1px solid #2c3750;
+                     background:#0f1626; color:var(--txt); font-size:14px; }
+    button { margin-top:16px; background:var(--accent); border:none; font-weight:600; cursor:pointer; }
+    button:disabled { opacity:.5; cursor:not-allowed; }
+    .stats { margin-top:20px; display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    .stat { background:#0f1626; border:1px solid #232c3f; border-radius:8px; padding:12px; }
+    .stat .v { font-size:22px; font-weight:700; color:var(--ok); }
+    .stat .k { font-size:11px; color:#8a94a8; text-transform:uppercase; letter-spacing:.04em; }
+    #map { flex:1; background:#0b0f18; }
+    .legend { background:white; padding:8px 10px; border-radius:6px; font-size:12px; color:#222; }
+    .legend span { display:inline-block; width:12px; height:12px; border-radius:50%; margin-right:4px; vertical-align:middle; }
+    .legend .line { height:3px; width:16px; border-radius:2px; display:inline-block; margin-right:4px; vertical-align:middle; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>PathSnap</h1>
+    <span class="sub">Distributed map-matching &amp; route reconstruction — evaluator interface</span>
+  </header>
+  <main>
+    <div class="sidebar">
+      <label for="trips">Select evaluation trip</label>
+      <select id="trips"><option>loading…</option></select>
+      <button id="run" onclick="run()">Predict route</button>
+
+      <div class="stats">
+        <div class="stat"><div class="v" id="s-acc">—</div><div class="k">Top-1 accuracy</div></div>
+        <div class="stat"><div class="v" id="s-pts">—</div><div class="k">observations</div></div>
+        <div class="stat"><div class="v" id="s-arcs">—</div><div class="k">route arcs</div></div>
+        <div class="stat"><div class="v" id="s-ms">—</div><div class="k">latency</div></div>
+      </div>
+      <div id="status" style="margin-top:14px;font-size:13px;color:#8a94a8;"></div>
+    </div>
+    <div id="map"></div>
+  </main>
+
+  <script>
+    const map = L.map('map').setView([20, 0], 2);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+      { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
+
+    async function loadTrips() {
+      const r = await fetch('/trips');
+      const j = await r.json();
+      const sel = document.getElementById('trips');
+      sel.innerHTML = j.trips.map(t => `<option value="${t}">${t}</option>`).join('');
+    }
+
+    async function run() {
+      const tid = document.getElementById('trips').value;
+      const btn = document.getElementById('run');
+      const st = document.getElementById('status');
+      btn.disabled = true; st.textContent = `Predicting ${tid}…`;
+      const t0 = performance.now();
+      try {
+        const r = await fetch('/predict', {
+          method: 'POST', headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({ trip_id: tid })
+        });
+        const j = await r.json();
+        const ms = Math.round(performance.now() - t0);
+        document.getElementById('s-acc').textContent = j.accuracy != null ? (j.accuracy*100).toFixed(1)+'%' : 'n/a';
+        document.getElementById('s-pts').textContent = j.n_points;
+        document.getElementById('s-arcs').textContent = j.predicted_route.length;
+        document.getElementById('s-ms').textContent = ms+'ms';
+        st.textContent = 'done';
+        draw(j);
+      } catch (e) {
+        st.textContent = 'error: ' + e;
+      } finally { btn.disabled = false; }
+    }
+
+    function draw(j) {
+      map.eachLayer(l => { if (l instanceof L.Polyline || l instanceof L.CircleMarker) map.removeLayer(l); });
+      const latlngs = j.track.map(p => [p[1], p[0]]);
+      const c = latlngs[0];
+      map.setView(c, 14);
+
+      // GPS observations (dots)
+      const step = Math.max(1, Math.floor(latlngs.length / 1500));
+      for (let i = 0; i < latlngs.length; i += step) {
+        L.circleMarker(latlngs[i], {radius:2, color:'#1e6bff', fillOpacity:0.7}).addTo(map);
+      }
+
+      // predicted route
+      const routePts = [];
+      for (const a of j.predicted_route) {
+        const [u, v] = j.arcs[a];
+        routePts.push([j.nodes[u][1], j.nodes[u][0]], [j.nodes[v][1], j.nodes[v][0]]);
+      }
+      const predLine = [];
+      for (let i = 0; i < routePts.length; i += 2) predLine.push(routePts[i]);
+      if (predLine.length) L.polyline(predLine, {color:'#ff3b6b', weight:3.5}).addTo(map);
+
+      // reference route
+      if (j.reference_route && j.reference_route.length) {
+        const ref = [];
+        for (const a of j.reference_route) {
+          const [u, v] = j.arcs[a];
+          ref.push([j.nodes[u][1], j.nodes[u][0]], [j.nodes[v][1], j.nodes[v][0]]);
+        }
+        const refLine = [];
+        for (let i = 0; i < ref.length; i += 2) refLine.push(ref[i]);
+        if (refLine.length) L.polyline(refLine, {color:'#22c55e', weight:3, opacity:.9}).addTo(map);
+      }
+
+      const legend = L.control({position:'bottomright'});
+      legend.onAdd = () => {
+        const d = L.DomUtil.create('div','legend');
+        d.innerHTML = '<span style="background:#1e6bff"></span>GPS obs<br>' +
+                      '<span class="line" style="background:#ff3b6b"></span>Predicted route<br>' +
+                      '<span class="line" style="background:#22c55e"></span>Reference route';
+        return d;
+      };
+      legend.addTo(map);
+    }
+
+    loadTrips();
+  </script>
+</body>
+</html>
