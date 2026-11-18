@@ -45,6 +45,7 @@ HMM_BETA = float(os.environ.get("PATHSNAP_HMM_BETA", _hmm_cfg.get("beta", 20.0))
 HMM_DISCONNECTED = float(os.environ.get("PATHSNAP_HMM_DISCONNECTED",
                                        _hmm_cfg.get("disconnected_penalty", 1e-6)))
 HMM_SWITCH = float(os.environ.get("PATHSNAP_HMM_SWITCH", _hmm_cfg.get("switch_penalty", 1.0)))
+EXPOSE_REFERENCE = os.environ.get("PATHSNAP_EXPOSE_REFERENCE", "0") == "1"
 
 app = FastAPI(title="PathSnap", version="1.0")
 app.add_middleware(
@@ -91,13 +92,14 @@ def predict(req: PredictRequest):
     res = predict_trip(model, trip, use_hmm=True, hmm=decoder)
     route = reconstruct_route(res["final_arcs"])
 
-    # server-side evaluation if the reference route is available
+    # server-side evaluation if the reference route is available.
+    # The reference route (ground truth) is NEVER returned to the UI.
     accuracy = None
     if trip.route is not None:
         true_arc, _ = _reference_arcs(trip)
         accuracy = float((res["final_arcs"] == true_arc).mean())
 
-    return {
+    resp = {
         "trip_id": tid,
         "n_points": trip.n_points,
         "predicted_route": route.astype(int).tolist(),
@@ -106,9 +108,12 @@ def predict(req: PredictRequest):
         "track": trip.track.astype(float).tolist(),
         "nodes": trip.nodes.astype(float).tolist(),
         "arcs": trip.arcs.astype(int).tolist(),
-        "reference_route": trip.route.astype(int).tolist() if trip.route is not None else None,
         "predicted_arcs": res["final_arcs"].astype(int).tolist(),
     }
+    # development-only: optionally expose the reference route (off by default)
+    if EXPOSE_REFERENCE and trip.route is not None:
+        resp["reference_route"] = trip.route.astype(int).tolist()
+    return resp
 
 
 def _reference_arcs(trip):

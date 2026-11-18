@@ -19,7 +19,7 @@
     .sidebar { width:340px; padding:20px; background:var(--panel); border-right:1px solid #232c3f;
                overflow-y:auto; }
     .sidebar label { display:block; font-size:13px; margin:12px 0 6px; color:#aab4c8; }
-    select, button { width:100%; padding:10px 12px; border-radius:8px; border:1px solid #2c3750;
+    select, button, input { width:100%; padding:10px 12px; border-radius:8px; border:1px solid #2c3750;
                      background:#0f1626; color:var(--txt); font-size:14px; }
     button { margin-top:16px; background:var(--accent); border:none; font-weight:600; cursor:pointer; }
     button:disabled { opacity:.5; cursor:not-allowed; }
@@ -40,6 +40,8 @@
   </header>
   <main>
     <div class="sidebar">
+      <label for="apiurl">API URL (Laptop 1)</label>
+      <input id="apiurl" type="text" placeholder="http://10.8.120.231:8000" />
       <label for="trips">Select evaluation trip</label>
       <select id="trips"><option>loading…</option></select>
       <button id="run" onclick="run()">Predict route</button>
@@ -60,11 +62,21 @@
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
       { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
 
+    // API base URL (Laptop 1). Persisted in localStorage; falls back to same-origin.
+    const apiInput = document.getElementById('apiurl');
+    apiInput.value = localStorage.getItem('apiBase') || '';
+    function apiBase() {
+      return (apiInput.value.trim() || '').replace(/\/+$/, '');
+    }
+    apiInput.addEventListener('change', () => localStorage.setItem('apiBase', apiInput.value.trim()));
+    function url(path) { return apiBase() + path; }
+
     async function loadTrips() {
-      const r = await fetch('/trips');
+      const r = await fetch(url('/trips'));
       const j = await r.json();
       const sel = document.getElementById('trips');
       sel.innerHTML = j.trips.map(t => `<option value="${t}">${t}</option>`).join('');
+      document.getElementById('status').textContent = apiBase() ? `connected to ${apiBase()}` : 'connected (same origin)';
     }
 
     async function run() {
@@ -74,7 +86,7 @@
       btn.disabled = true; st.textContent = `Predicting ${tid}…`;
       const t0 = performance.now();
       try {
-        const r = await fetch('/predict', {
+        const r = await fetch(url('/predict'), {
           method: 'POST', headers: {'Content-Type':'application/json'},
           body: JSON.stringify({ trip_id: tid })
         });
