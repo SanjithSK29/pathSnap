@@ -87,7 +87,7 @@
       btn.disabled = true; st.textContent = `Predicting ${tid}…`;
       const t0 = performance.now();
       try {
-        const r = await fetch(url('/predict'), {
+        const r = await fetch(`${API_BASE}/predict`, {
           method: 'POST', headers: {'Content-Type':'application/json'},
           body: JSON.stringify({ trip_id: tid })
         });
