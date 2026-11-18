@@ -7,12 +7,8 @@ experiments/*.npz
 experiments/student_test/
 experiments/logs/*.log
 
-# large regenerable model artifacts (rebuilt by scripts/train_models.py)
+# large regenerable model artifact (207 MB; rebuilt by scripts/train_models.py)
 artifacts/models/Random_Forest.joblib
-artifacts/models/HistGradientBoosting.joblib
-artifacts/models/XGBoost.joblib
-artifacts/models/MLP.joblib
-artifacts/models/LightGBM_tuned.joblib
 
 __pycache__/
 *.pyc
