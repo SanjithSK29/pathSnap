@@ -46,7 +46,6 @@ HMM_BETA = float(os.environ.get("PATHSNAP_HMM_BETA", _hmm_cfg.get("beta", 20.0))
 HMM_DISCONNECTED = float(os.environ.get("PATHSNAP_HMM_DISCONNECTED",
                                        _hmm_cfg.get("disconnected_penalty", 1e-6)))
 HMM_SWITCH = float(os.environ.get("PATHSNAP_HMM_SWITCH", _hmm_cfg.get("switch_penalty", 1.0)))
-EXPOSE_REFERENCE = os.environ.get("PATHSNAP_EXPOSE_REFERENCE", "0") == "1"
 
 app = FastAPI(title="PathSnap", version="1.0")
 app.add_middleware(
@@ -111,9 +110,6 @@ def predict(req: PredictRequest):
         "arcs": trip.arcs.astype(int).tolist(),
         "predicted_arcs": res["final_arcs"].astype(int).tolist(),
     }
-    # development-only: optionally expose the reference route (off by default)
-    if EXPOSE_REFERENCE and trip.route is not None:
-        resp["reference_route"] = trip.route.astype(int).tolist()
     return resp
 
 
