@@ -58,6 +58,7 @@
   </main>
 
   <script>
+    const API_BASE = "http://192.168.1.23:8000";
     const map = L.map('map').setView([20, 0], 2);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
       { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
@@ -72,7 +73,7 @@
     function url(path) { return apiBase() + path; }
 
     async function loadTrips() {
-      const r = await fetch(url('/trips'));
+      const r = await fetch(`${API_BASE}/trips`);
       const j = await r.json();
       const sel = document.getElementById('trips');
       sel.innerHTML = j.trips.map(t => `<option value="${t}">${t}</option>`).join('');
