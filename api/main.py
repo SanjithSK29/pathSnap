@@ -23,11 +23,28 @@ from pathsnap.io import list_trips, load_trip
 from pathsnap.pipeline import predict_trip, reconstruct_route
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DATA_DIR = os.environ.get("PATHSNAP_DATA_DIR", os.path.join(ROOT, "student_test"))
+
+# load config.json if present (env vars take precedence)
+CONFIG = {}
+_cfg_path = os.path.join(ROOT, "config.json")
+if os.path.exists(_cfg_path):
+    try:
+        import json as _json
+        with open(_cfg_path) as _f:
+            CONFIG = _json.load(_f)
+    except Exception:
+        CONFIG = {}
+
+_hmm_cfg = CONFIG.get("hmm", {})
+DATA_DIR = os.environ.get("PATHSNAP_DATA_DIR",
+                          os.path.join(ROOT, CONFIG.get("deployment", {}).get("data_dir", "student_test")))
 MODEL_PATH = os.environ.get("PATHSNAP_MODEL",
-                            os.path.join(ROOT, "artifacts", "models", "LightGBM.joblib"))
-HMM_BETA = float(os.environ.get("PATHSNAP_HMM_BETA", "20.0"))
-HMM_DISCONNECTED = float(os.environ.get("PATHSNAP_HMM_DISCONNECTED", "1e-6"))
+                            os.path.join(ROOT, CONFIG.get("deployment", {}).get("model",
+                                "artifacts/models/LightGBM.joblib")))
+HMM_BETA = float(os.environ.get("PATHSNAP_HMM_BETA", _hmm_cfg.get("beta", 20.0)))
+HMM_DISCONNECTED = float(os.environ.get("PATHSNAP_HMM_DISCONNECTED",
+                                       _hmm_cfg.get("disconnected_penalty", 1e-6)))
+HMM_SWITCH = float(os.environ.get("PATHSNAP_HMM_SWITCH", _hmm_cfg.get("switch_penalty", 1.0)))
 
 app = FastAPI(title="PathSnap", version="1.0")
 app.add_middleware(
@@ -35,7 +52,8 @@ app.add_middleware(
 )
 
 model = None
-decoder = HMMDecoder(beta=HMM_BETA, disconnected_penalty=HMM_DISCONNECTED)
+decoder = HMMDecoder(beta=HMM_BETA, disconnected_penalty=HMM_DISCONNECTED,
+                     switch_penalty=HMM_SWITCH)
 
 
 @app.on_event("startup")

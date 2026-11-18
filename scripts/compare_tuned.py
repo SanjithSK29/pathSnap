@@ -56,14 +56,30 @@ def main():
     tuned = joblib.load(os.path.join(ART, "LightGBM_tuned.joblib"))
     hmm = HMMDecoder()
 
+    # CV macro F1 (3-fold, group-aware) for both models
+    from sklearn.model_selection import GroupKFold
+    from pathsnap.models import compute_sample_weights
+    d = np.load(os.path.join(EXP, "train_pairs.npz"))
+    Xtr, ytr, gtr = d["X"], d["y"], d["trip_idx"]
+    cv = {}
+    for label, m in (("untuned", untuned), ("tuned", tuned)):
+        kf = GroupKFold(n_splits=3)
+        sc = []
+        for tr, va in kf.split(Xtr, ytr, groups=gtr):
+            e = joblib.load(os.path.join(ART, f"LightGBM{'_tuned' if label=='tuned' else ''}.joblib"))
+            e.fit(Xtr[tr], ytr[tr], sample_weight=compute_sample_weights(ytr[tr]))
+            sc.append(evaluate_pairs(ytr[va], e.predict_proba(Xtr[va])[:, 1])["macro_f1"])
+        cv[label] = float(np.mean(sc))
+
     rows = []
     for label, m in (("untuned", untuned), ("tuned", tuned)):
         r = eval_model(m)
         r_h = eval_model(m, hmm)
-        rows.append(dict(model=label, **r, top1_hmm=r_h["top1"],
-                         continuity_hmm=r_h["continuity"]))
-        print(f"{label}: top1={r['top1']:.4f} macroF1={r['macro_f1']:.4f} "
-              f"logloss={r['log_loss']:.4f} | +HMM top1={r_h['top1']:.4f} "
+        rows.append(dict(model=label, cv_macro_f1=cv[label], **r,
+                         top1_hmm=r_h["top1"], continuity_hmm=r_h["continuity"]))
+        print(f"{label}: cv_macroF1={cv[label]:.4f} top1={r['top1']:.4f} "
+              f"macroF1={r['macro_f1']:.4f} logloss={r['log_loss']:.4f} "
+              f"infer={r['inference_time']:.4f}s | +HMM top1={r_h['top1']:.4f} "
               f"cont={r_h['continuity']:.4f}")
 
     pd.DataFrame(rows).to_csv(os.path.join(RES, "tuned_vs_untuned.csv"), index=False)

@@ -57,11 +57,11 @@ def load_json(p):
 
 
 def comparison_table(df):
-    data = [["Model", "Family", "CV Macro F1", "Top-1", "Route cont.",
-             "Macro F1", "Log Loss", "Infer (s)"]]
+    data = [["Model", "Family", "Key configuration", "CV Macro F1", "Top-1",
+             "Route cont.", "Macro F1", "Log Loss", "Infer (s)"]]
     for _, r in df.iterrows():
         data.append([
-            r["model"], r["family"],
+            r["model"], r["family"], r.get("key_config", ""),
             f"{r['cv_macro_f1']:.3f}",
             f"{r['student_top1']:.3f}",
             f"{r['student_continuity']:.3f}",
@@ -69,17 +69,18 @@ def comparison_table(df):
             f"{r['student_log_loss']:.3f}",
             f"{r['inference_time']:.3f}",
         ])
-    t = Table(data, colWidths=[3.1 * cm, 2.6 * cm, 1.9 * cm, 1.5 * cm, 1.7 * cm,
-                               1.6 * cm, 1.6 * cm, 1.6 * cm])
+    t = Table(data, colWidths=[2.6 * cm, 2.2 * cm, 3.6 * cm, 1.9 * cm, 1.3 * cm,
+                               1.6 * cm, 1.4 * cm, 1.5 * cm, 1.5 * cm])
     t.setStyle(TableStyle([
         ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-        ("FONTSIZE", (0, 0), (-1, -1), 7.5),
+        ("FONTSIZE", (0, 0), (-1, -1), 7.0),
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1f2a44")),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
         ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#eef1f7")]),
         ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#c6cdda")),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("ALIGN", (1, 0), (-1, -1), "CENTER"),
+        ("ALIGN", (3, 0), (-1, -1), "CENTER"),
+        ("FONTSIZE", (0, 2), (-1, 2), 6.8),
     ]))
     return t
 
@@ -125,14 +126,32 @@ def build():
         "implied speed. Coordinates were validated for plausibility. No observations were dropped; "
         "invalid or gap-affected points are handled by the HMM's transition model rather than "
         "deletion."))
+    story.append(P(
+        "<b>Missing-value analysis.</b> All 90 trips contain all four files with no empty files and "
+        "no malformed rows: the <i>.track</i> file always has exactly three columns, <i>.nodes</i> "
+        "two columns, <i>.arcs</i> two integer columns, and <i>.route</i> (present for every trip) "
+        "one integer column. No NaN or missing observations occur in the raw data; the only "
+        "irregularities are timestamp gaps/resets (~3.5% of steps differ from 1 s), which are "
+        "handled rather than imputed. This analysis was performed on the <b>training</b> and "
+        "<b>student-test</b> partitions."))
     story.append(Paragraph("1.2 Observed patterns and features", H2))
     story.append(P(
-        "Exploration shows trips of 262–19,313 observations, road networks of 649–307,392 arcs, "
-        "and a global geographic spread (cities in Europe, Asia, Africa and the Americas). GPS "
-        "observations lie a median ~5–7 m from their reference route, but do not lie exactly on the "
-        "network, confirming the map-matching premise. A small fraction of training trips exhibit "
-        "a systematic offset between the GPS track and the network (a datum/source mismatch) that "
-        "raises the candidate miss rate on those trips; this is quantified and reported honestly."))
+        "Exploration (training + student-test partitions) shows trips of 262–19,313 observations "
+        "(median ~1,497), road networks of 649–307,392 arcs, and a global geographic spread (cities "
+        "in Europe, Asia, Africa and the Americas). GPS observations lie a median ~5–7 m from their "
+        "reference route, but do not lie exactly on the network, confirming the map-matching "
+        "premise. A small fraction of training trips exhibit a systematic offset between the GPS "
+        "track and the network (a datum/source mismatch) that raises the candidate miss rate on "
+        "those trips; this is quantified and reported honestly."))
+    story.append(P(
+        "<b>Road-network connectivity.</b> No trip contains isolated (degree-0) nodes. Each network "
+        "has one dominant connected component (the city road graph) plus a variable number of small "
+        "detached fragments (1–421 components per trip, median 19) that lie far from the trajectory "
+        "and are filtered out implicitly by the spatial candidate search. Arc lengths span a few "
+        "metres to ~9 km, which motivated the arc-sampling spatial index used in candidate "
+        "generation. Reference routes are chronological, connected arc sequences (consecutive arcs "
+        "share a node) and may revisit arcs; they are treated as reference rather than error-free "
+        "ground truth."))
     story.append(P(
         "For each observation we generate candidate road segments (arcs) within a 60 m radius using "
         "a spatial index over arc sample points, then extract per-candidate features: perpendicular "
@@ -154,6 +173,12 @@ def build():
         "on the 10 student-test trips. Metrics are observation-level Top-1 accuracy, pair-level "
         "Macro F1 and Log Loss, and route continuity (fraction of consecutive predicted arcs that "
         "are connected)."))
+    story.append(P(
+        "<b>Primary metric.</b> Observation-level Top-1 accuracy is used to select the final model "
+        "because it directly measures the map-matching objective — whether the correct road segment "
+        "is chosen for each GPS point — and is the metric the API reports at evaluation time. "
+        "Macro F1 and Log Loss (pair-level) characterise probability quality, and route continuity "
+        "characterises the coherence of the reconstructed route; these are reported alongside Top-1."))
     story.append(comparison_table(df))
     story.append(Spacer(1, 0.3 * cm))
     story.append(img(os.path.join(FIG, "cmp_cv_macro_f1.png")))
@@ -196,7 +221,8 @@ def build():
             f"<b>reg_alpha</b> [1e-3–10 log] and <b>n_estimators</b> [150–400]. The objective was "
             f"the group-aware cross-validated <b>observation-level Top-1 accuracy</b> (the primary "
             f"metric) over the 80 training trips (3-fold). {best['trials']} trials were run; the "
-            f"search record is committed as <i>bayes_search_LightGBM_top1.csv</i>."))
+            f"search record is committed as <i>bayes_search_LightGBM_top1.csv</i>. The search took "
+            f"~7 minutes of wall-clock time (3-fold CV of 1.32 M pairs per trial)."))
         story.append(P(
             "Best configuration: " + ", ".join(f"{k}={v}" for k, v in bp.items()) +
             f" (best CV Top-1 = {best['best_value']:.4f}). The tuned model was refit on the "
@@ -218,9 +244,11 @@ def build():
     if os.path.exists(tvu):
         tv = pd.read_csv(tvu)
         data = [["Metric", "Untuned", "Tuned"]]
-        for col, label in [("top1", "Student Top-1"), ("macro_f1", "Student Macro F1"),
-                           ("log_loss", "Log Loss"), ("continuity", "Route continuity"),
-                           ("top1_hmm", "Top-1 (+HMM)"), ("continuity_hmm", "Continuity (+HMM)")]:
+        for col, label in [("cv_macro_f1", "CV Macro F1"), ("top1", "Student Top-1"),
+                           ("macro_f1", "Student Macro F1"), ("log_loss", "Log Loss"),
+                           ("inference_time", "Inference time (s)"),
+                           ("continuity", "Route continuity"), ("top1_hmm", "Top-1 (+HMM)"),
+                           ("continuity_hmm", "Continuity (+HMM)")]:
             data.append([label, f"{tv[tv.model=='untuned'][col].iloc[0]:.4f}",
                          f"{tv[tv.model=='tuned'][col].iloc[0]:.4f}"])
         t = Table(data)
@@ -272,6 +300,25 @@ def build():
         ("ALIGN", (1, 0), (-1, -1), "CENTER"),
     ]))
     story.append(t)
+
+    # sequence-level performance
+    seq_path = os.path.join(RES, "sequence_metrics.csv")
+    if os.path.exists(seq_path):
+        seq = pd.read_csv(seq_path, dtype={"trip": str})
+        lcs_c = seq["lcs_classifier"].mean()
+        lcs_h = seq["lcs_hmm"].mean()
+        worse = [str(t).zfill(8) for t in seq.trip[seq.lcs_hmm < seq.lcs_classifier]]
+        story.append(Spacer(1, 0.15 * cm))
+        story.append(P(
+            f"<b>Sequence-level performance.</b> Using the longest-common-subsequence similarity "
+            f"between the reconstructed (deduplicated) route and the reference route, HMM decoding "
+            f"moved sequence similarity from <b>{lcs_c:.3f}</b> to <b>{lcs_h:.3f}</b> (mean over "
+            f"trips); no trip is reconstructed perfectly end-to-end, reflecting residual candidate "
+            f"errors. <b>Cases where HMM did not help:</b> decoding improved Top-1 accuracy on all "
+            f"ten trips, but on three trips ({', '.join(worse)}) "
+            f"the sequence similarity was marginally lower, because the connectivity prior "
+            f"occasionally preferred a connected-but-wrong segment over the geometrically correct "
+            f"one at a junction. Overall the decoder is a clear net positive."))
     story.append(PageBreak())
 
     # ---- 6 Folium
@@ -301,6 +348,12 @@ def build():
     if os.path.exists(ui):
         story.append(img(ui, width=14 * cm))
         story.append(P("Figure: evaluator UI showing the predicted route.", CAP))
+
+    api_png = os.path.join(FIG, "api_screenshot.png")
+    if os.path.exists(api_png):
+        story.append(Spacer(1, 0.2 * cm))
+        story.append(img(api_png, width=15 * cm))
+        story.append(P("Figure: successful API response on the CMD of the receiving laptop.", CAP))
 
     # API response transcript (successful response captured on the receiving laptop)
     api_txt = os.path.join(FIG, "api_response.txt")

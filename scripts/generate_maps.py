@@ -20,11 +20,28 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ART = os.path.join(ROOT, "artifacts", "models")
 
 
-def build_map(trip, pred_arcs, out_html, title=None):
+def build_map(trip, pred_arcs, out_html, title=None, show_network=True):
     import folium
     lon, lat = trip.track[:, 0], trip.track[:, 1]
     m = folium.Map(location=[lat.mean(), lon.mean()], zoom_start=14,
                    tiles="OpenStreetMap")
+
+    # road-network geometry (arcs near the trajectory bounding box)
+    if show_network:
+        fg_net = folium.FeatureGroup(name="Road network", show=False)
+        pad = 0.002
+        mask = ((trip.nodes[:, 0] >= lon.min() - pad) & (trip.nodes[:, 0] <= lon.max() + pad)
+                & (trip.nodes[:, 1] >= lat.min() - pad) & (trip.nodes[:, 1] <= lat.max() + pad))
+        keep_arc = mask[trip.arcs[:, 0]] & mask[trip.arcs[:, 1]]
+        idx = np.flatnonzero(keep_arc)
+        step = max(1, len(idx) // 4000)
+        segs = []
+        for ai in idx[::step]:
+            u, v = trip.arcs[ai]
+            segs.append([[trip.nodes[u][1], trip.nodes[u][0]],
+                         [trip.nodes[v][1], trip.nodes[v][0]]])
+        folium.PolyLine(segs, color="#9aa7b8", weight=1, opacity=0.4).add_to(fg_net)
+        m.add_child(fg_net)
 
     fg_gps = folium.FeatureGroup(name="GPS observations")
     step = max(1, len(lon) // 2000)

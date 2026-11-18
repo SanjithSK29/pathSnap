@@ -29,18 +29,47 @@ for d in (FIG, MAP, RES):
     os.makedirs(d, exist_ok=True)
 
 
+def _connected_components(n_nodes, arcs):
+    """Number of connected components and isolated nodes in the road network."""
+    parent = list(range(n_nodes))
+    def find(x):
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+    def union(a, b):
+        ra, rb = find(a), find(b)
+        if ra != rb:
+            parent[rb] = ra
+    for u, v in arcs:
+        union(int(u), int(v))
+    roots = {find(i) for i in range(n_nodes)}
+    degree = np.zeros(n_nodes, dtype=int)
+    for u, v in arcs:
+        degree[int(u)] += 1
+        degree[int(v)] += 1
+    isolated = int((degree == 0).sum())
+    return len(roots), isolated
+
+
 def trip_statistics(directory, tid):
+    import os
     trip = load_trip(directory, tid)
     lon, lat, t = trip.track[:, 0], trip.track[:, 1], trip.track[:, 2]
     dt = np.abs(np.diff(t))
     step = haversine(lon[:-1], lat[:-1], lon[1:], lat[1:])
     n = trip.n_points
+    base = os.path.join(directory, tid, tid)
+    sizes = {ext: os.path.getsize(base + ext) for ext in (".track", ".nodes", ".arcs", ".route")}
+    n_components, isolated = _connected_components(trip.n_nodes, trip.arcs)
     return dict(
         trip_id=tid,
         n_points=n,
         n_nodes=trip.n_nodes,
         n_arcs=trip.n_arcs,
         route_len=len(trip.route) if trip.route is not None else np.nan,
+        track_bytes=sizes[".track"], nodes_bytes=sizes[".nodes"],
+        arcs_bytes=sizes[".arcs"], route_bytes=sizes[".route"],
         lon_min=lon.min(), lon_max=lon.max(),
         lat_min=lat.min(), lat_max=lat.max(),
         lon_mean=lon.mean(), lat_mean=lat.mean(),
@@ -51,6 +80,8 @@ def trip_statistics(directory, tid):
         step_p99=float(np.percentile(step, 99)),
         step_max=float(step.max()),
         arc_density=float(trip.n_arcs / max(n, 1)),
+        n_components=int(n_components),
+        isolated_nodes=int(isolated),
     )
 
 

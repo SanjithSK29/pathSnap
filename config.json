@@ -1,0 +1,18 @@
+{
+  "candidate_generation": {
+    "radius_m": 60.0,
+    "k": 10,
+    "sample_step_m": 25.0
+  },
+  "hmm": {
+    "beta": 20.0,
+    "disconnected_penalty": 1e-6,
+    "path_slack": 1.5,
+    "extra_margin_m": 100.0,
+    "switch_penalty": 1.0
+  },
+  "deployment": {
+    "model": "artifacts/models/LightGBM.joblib",
+    "data_dir": "student_test"
+  }
+}

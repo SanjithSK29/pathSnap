@@ -126,7 +126,7 @@ def main():
               f"infer={st['inference_time']:.3f}s", flush=True)
 
         rows.append(dict(
-            model=name, family=spec["family"],
+            model=name, family=spec["family"], key_config=spec["key_config"],
             cv_macro_f1=cv["macro_f1"], cv_macro_f1_std=cv["macro_f1_std"],
             cv_log_loss=cv["log_loss"],
             cv_precision=cv["precision"], cv_recall=cv["recall"],

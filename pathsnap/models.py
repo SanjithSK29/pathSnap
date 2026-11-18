@@ -66,14 +66,23 @@ def _make_mlp():
 
 MODELS = [
     dict(name="Logistic Regression", family="Linear / probabilistic",
+         key_config="C=1.0, L2, class_weight=balanced",
          make=_make_logreg, needs_scale=True),
-    dict(name="Random Forest", family="Ensemble (bagging)", make=_make_rf,
-         needs_scale=False),
-    dict(name="HistGradientBoosting", family="Boosting", make=_make_hgb,
-         needs_scale=False),
-    dict(name="XGBoost", family="Boosting", make=_make_xgb, needs_scale=False),
-    dict(name="LightGBM", family="Boosting", make=_make_lgbm, needs_scale=False),
-    dict(name="MLP", family="Neural network", make=_make_mlp, needs_scale=True),
+    dict(name="Random Forest", family="Ensemble (bagging)",
+         key_config="150 trees, max_depth=20, min_samples_leaf=20",
+         make=_make_rf, needs_scale=False),
+    dict(name="HistGradientBoosting", family="Boosting",
+         key_config="250 iters, lr=0.1, max_leaf_nodes=31",
+         make=_make_hgb, needs_scale=False),
+    dict(name="XGBoost", family="Boosting",
+         key_config="250 trees, max_depth=6, lr=0.1, hist",
+         make=_make_xgb, needs_scale=False),
+    dict(name="LightGBM", family="Boosting",
+         key_config="250 trees, num_leaves=31, lr=0.1",
+         make=_make_lgbm, needs_scale=False),
+    dict(name="MLP", family="Neural network",
+         key_config="hidden (64,32), ReLU, early stopping",
+         make=_make_mlp, needs_scale=True),
 ]
 
 
